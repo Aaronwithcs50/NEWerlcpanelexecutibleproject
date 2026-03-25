@@ -35,15 +35,15 @@
       <aside id="sidebar" class="glass sidebar">
         <button id="collapseBtn" class="collapse-btn" title="Toggle sidebar"><i class="fa-solid fa-chevron-left"></i></button>
         <section>
-          <h3>Join Log</h3>
+          <h3><i class="fa-solid fa-right-to-bracket"></i> Join Log</h3>
           <div id="joinLog" class="log-list"></div>
         </section>
         <section>
-          <h3>Kill Log</h3>
+          <h3><i class="fa-solid fa-skull"></i> Kill Log</h3>
           <div id="killLog" class="log-list"></div>
         </section>
         <section>
-          <h3>Command Log</h3>
+          <h3><i class="fa-solid fa-terminal"></i> Command Log</h3>
           <div id="commandLog" class="log-list"></div>
         </section>
       </aside>
@@ -52,7 +52,7 @@
         <div id="serverStatus" class="glass card"></div>
 
         <div class="glass card find-user">
-          <h2>Find User</h2>
+          <h2><i class="fa-solid fa-user-magnifying-glass"></i> Find User</h2>
           <div class="row">
             <input id="usernameInput" type="text" placeholder="Roblox username" />
             <button id="findBtn" class="btn"><i class="fa-solid fa-magnifying-glass"></i> Find</button>
@@ -62,7 +62,7 @@
         <div id="userCard" class="glass card hidden"></div>
 
         <div id="commandsPanel" class="glass card hidden">
-          <h2>Actions</h2>
+          <h2><i class="fa-solid fa-bolt"></i> Actions</h2>
           <div id="commandButtons" class="command-grid"></div>
           <div class="custom-command">
             <input id="customCommandInput" type="text" placeholder="Custom command name (without :)" />
@@ -72,11 +72,11 @@
 
         <div class="glass dual-grid">
           <div class="sub-panel">
-            <h2>Mod Calls</h2>
+            <h2><i class="fa-solid fa-bell"></i> Mod Calls</h2>
             <div id="modCalls" class="feed-list"></div>
           </div>
           <div class="sub-panel">
-            <h2>Players Online</h2>
+            <h2><i class="fa-solid fa-users"></i> Players Online</h2>
             <div id="playersOnline" class="feed-list"></div>
           </div>
         </div>
@@ -193,7 +193,7 @@
 
     function renderServerStatus(data) {
       el.serverStatus.innerHTML = `
-        <h2>Server Status</h2>
+        <h2><i class="fa-solid fa-signal"></i> Server Status</h2>
         <div class="status-grid">
           <div><span>Name</span><strong>${data.Name || 'N/A'}</strong></div>
           <div><span>Players</span><strong>${data.CurrentPlayers || 0} / ${data.MaxPlayers || 0}</strong></div>
