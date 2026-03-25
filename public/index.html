@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ER:LC Operations Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-d0M8s5S2YxM54q9WlH0I1GtIsfRSAxEPPYUajF2iGaGLjm+rXhN3kLBXjg5eQof8I4e+OeXtfqCFPfeU3uO/7A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-orb orb-3"></div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <div class="app-shell">
+    <header class="glass header-card">
+      <div>
+        <h1>ER:LC Operations Panel</h1>
+        <p class="sub">Real-time moderation and operational controls</p>
+      </div>
+      <div class="connect-bar">
+        <input id="serverKeyInput" type="text" placeholder="Enter server key" />
+        <button id="connectBtn" class="btn"><i class="fa-solid fa-plug"></i> Connect</button>
+      </div>
+    </header>
+
+    <div id="inlineError" class="glass error-box hidden"></div>
+
+    <main class="layout">
+      <aside id="sidebar" class="glass sidebar">
+        <button id="collapseBtn" class="collapse-btn" title="Toggle sidebar"><i class="fa-solid fa-chevron-left"></i></button>
+        <section>
+          <h3>Join Log</h3>
+          <div id="joinLog" class="log-list"></div>
+        </section>
+        <section>
+          <h3>Kill Log</h3>
+          <div id="killLog" class="log-list"></div>
+        </section>
+        <section>
+          <h3>Command Log</h3>
+          <div id="commandLog" class="log-list"></div>
+        </section>
+      </aside>
+
+      <section class="main-content">
+        <div id="serverStatus" class="glass card"></div>
+
+        <div class="glass card find-user">
+          <h2>Find User</h2>
+          <div class="row">
+            <input id="usernameInput" type="text" placeholder="Roblox username" />
+            <button id="findBtn" class="btn"><i class="fa-solid fa-magnifying-glass"></i> Find</button>
+          </div>
+        </div>
+
+        <div id="userCard" class="glass card hidden"></div>
+
+        <div id="commandsPanel" class="glass card hidden">
+          <h2>Actions</h2>
+          <div id="commandButtons" class="command-grid"></div>
+          <div class="custom-command">
+            <input id="customCommandInput" type="text" placeholder="Custom command name (without :)" />
+            <button id="customRunBtn" class="btn">Run</button>
+          </div>
+        </div>
+
+        <div class="glass dual-grid">
+          <div class="sub-panel">
+            <h2>Mod Calls</h2>
+            <div id="modCalls" class="feed-list"></div>
+          </div>
+          <div class="sub-panel">
+            <h2>Players Online</h2>
+            <div id="playersOnline" class="feed-list"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="resultModal" class="modal hidden">
+    <div class="glass modal-content">
+      <h2>Command Result</h2>
+      <pre id="modalText"></pre>
+      <button id="closeModal" class="btn">Dismiss</button>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      connected: false,
+      selectedUser: null,
+      commandActions: [
+        ['Kick', 'kick'],
+        ['Kill', 'kill'],
+        ['Bring', 'bring'],
+        ['Freeze', 'freeze'],
+        ['Unfreeze', 'unfreeze'],
+        ['Heal', 'heal'],
+        ['Force Respawn', 'respawn'],
+        ['Arrest', 'arrest'],
+        ['Unarrest', 'unarrest']
+      ]
+    };
+
+    const el = {
+      serverKeyInput: document.getElementById('serverKeyInput'),
+      connectBtn: document.getElementById('connectBtn'),
+      inlineError: document.getElementById('inlineError'),
+      serverStatus: document.getElementById('serverStatus'),
+      usernameInput: document.getElementById('usernameInput'),
+      findBtn: document.getElementById('findBtn'),
+      userCard: document.getElementById('userCard'),
+      commandsPanel: document.getElementById('commandsPanel'),
+      commandButtons: document.getElementById('commandButtons'),
+      customCommandInput: document.getElementById('customCommandInput'),
+      customRunBtn: document.getElementById('customRunBtn'),
+      joinLog: document.getElementById('joinLog'),
+      killLog: document.getElementById('killLog'),
+      commandLog: document.getElementById('commandLog'),
+      modCalls: document.getElementById('modCalls'),
+      playersOnline: document.getElementById('playersOnline'),
+      toastContainer: document.getElementById('toastContainer'),
+      resultModal: document.getElementById('resultModal'),
+      modalText: document.getElementById('modalText'),
+      closeModal: document.getElementById('closeModal'),
+      collapseBtn: document.getElementById('collapseBtn'),
+      sidebar: document.getElementById('sidebar')
+    };
+
+    function showError(message) {
+      el.inlineError.textContent = message;
+      el.inlineError.classList.remove('hidden');
+    }
+
+    function clearError() {
+      el.inlineError.textContent = '';
+      el.inlineError.classList.add('hidden');
+    }
+
+    function formatTimestamp(ts) {
+      const date = new Date(Number(ts) * 1000);
+      return Number.isNaN(date.getTime()) ? 'Unknown time' : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+
+    function parsePlayer(raw) {
+      const [name, id] = String(raw || '').split(':');
+      return { name: name || 'Unknown', id: id || 'Unknown' };
+    }
+
+    function toast(message, type = 'success') {
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.textContent = message;
+      el.toastContainer.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+
+    function openModal(content) {
+      el.modalText.textContent = content;
+      el.resultModal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      el.resultModal.classList.add('hidden');
+    }
+
+    async function api(url, options = {}) {
+      const res = await fetch(url, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      });
+      let data = {};
+      const text = await res.text();
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { raw: text };
+        }
+      }
+      if (!res.ok) {
+        throw data;
+      }
+      return data;
+    }
+
+    function renderServerStatus(data) {
+      el.serverStatus.innerHTML = `
+        <h2>Server Status</h2>
+        <div class="status-grid">
+          <div><span>Name</span><strong>${data.Name || 'N/A'}</strong></div>
+          <div><span>Players</span><strong>${data.CurrentPlayers || 0} / ${data.MaxPlayers || 0}</strong></div>
+          <div><span>Join Key</span><strong>${data.JoinKey || 'N/A'}</strong></div>
+          <div><span>Team Balance</span><strong>${String(data.TeamBalance ?? 'N/A')}</strong></div>
+        </div>
+      `;
+    }
+
+    function renderUserCard(user) {
+      el.userCard.classList.remove('hidden');
+      el.commandsPanel.classList.remove('hidden');
+      el.userCard.innerHTML = `
+        <div class="user-header">
+          <div class="avatar"><i class="fa-solid fa-user"></i></div>
+          <div>
+            <h2>${user.username}</h2>
+            <p>ID: ${user.playerId}</p>
+          </div>
+        </div>
+        <div class="status-grid">
+          <div><span>Permission</span><strong>${user.permission || 'Unknown'}</strong></div>
+          <div><span>Team</span><strong>${user.team || 'Unknown'}</strong></div>
+          <div><span>Callsign</span><strong>${user.callsign || 'None'}</strong></div>
+        </div>
+      `;
+    }
+
+    function appendLog(container, text) {
+      const item = document.createElement('div');
+      item.className = 'log-item pulse';
+      item.textContent = text;
+      container.prepend(item);
+    }
+
+    function renderJoinLogs(logs) {
+      el.joinLog.innerHTML = '';
+      logs.slice(-80).reverse().forEach((entry) => {
+        const player = parsePlayer(entry.Player);
+        const type = entry.Join ? 'joined' : 'left';
+        appendLog(el.joinLog, `${formatTimestamp(entry.Timestamp)} • ${player.name} ${type}`);
+      });
+    }
+
+    function renderKillLogs(logs) {
+      el.killLog.innerHTML = '';
+      logs.slice(-80).reverse().forEach((entry) => {
+        const killer = parsePlayer(entry.Killer);
+        const killed = parsePlayer(entry.Killed);
+        appendLog(el.killLog, `${formatTimestamp(entry.Timestamp)} • ${killer.name} ➜ ${killed.name}`);
+      });
+    }
+
+    function renderCommandLogs(logs) {
+      el.commandLog.innerHTML = '';
+      logs.slice(-100).reverse().forEach((entry) => {
+        const player = parsePlayer(entry.Player);
+        appendLog(el.commandLog, `${formatTimestamp(entry.Timestamp)} • ${player.name}: ${entry.Command}`);
+      });
+    }
+
+    function addCommandAudit(command) {
+      const now = Math.floor(Date.now() / 1000);
+      appendLog(el.commandLog, `${formatTimestamp(now)} • Local: ${command}`);
+    }
+
+    async function fetchLogsAndPlayers() {
+      const [join, kill, command, players] = await Promise.all([
+        api('/api/logs/join'),
+        api('/api/logs/kill'),
+        api('/api/logs/command'),
+        api('/api/players')
+      ]);
+      renderJoinLogs(join);
+      renderKillLogs(kill);
+      renderCommandLogs(command);
+      renderPlayers(players);
+    }
+
+    function renderPlayers(players) {
+      el.playersOnline.innerHTML = '';
+      const summary = document.createElement('div');
+      summary.className = 'log-item';
+      summary.textContent = `Online: ${players.length}`;
+      el.playersOnline.appendChild(summary);
+      players.forEach((player) => {
+        const p = parsePlayer(player.Player);
+        appendLog(el.playersOnline, `${p.name} • ${player.Team || 'No Team'} • ${player.Permission || 'N/A'}`);
+      });
+    }
+
+    async function fetchModCalls() {
+      try {
+        const modCalls = await api('/api/logs/modcalls');
+        el.modCalls.innerHTML = '';
+        (modCalls || []).slice(-50).reverse().forEach((call) => {
+          const caller = parsePlayer(call.Caller);
+          const mod = parsePlayer(call.Moderator || 'Unresponded:');
+          appendLog(el.modCalls, `${formatTimestamp(call.Timestamp)} • ${caller.name} → ${mod.name || 'Unresponded'}`);
+        });
+      } catch (err) {
+        toast(`Mod calls refresh failed: ${err.message || 'Unknown error'}`, 'error');
+      }
+    }
+
+    async function executeCommand(command) {
+      try {
+        const result = await api('/api/command', {
+          method: 'POST',
+          body: JSON.stringify({ command })
+        });
+        toast(`Success: ${command}`, 'success');
+        openModal(`Command: ${command}\nResult: ${JSON.stringify(result, null, 2)}`);
+        addCommandAudit(command);
+      } catch (err) {
+        const msg = `Error ${err.code || ''}: ${err.message || 'Failed command'}`.trim();
+        toast(msg, 'error');
+        openModal(`Command: ${command}\nError: ${JSON.stringify(err, null, 2)}`);
+      }
+    }
+
+    function initCommandButtons() {
+      el.commandButtons.innerHTML = '';
+      state.commandActions.forEach(([label, cmd]) => {
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.textContent = label;
+        btn.onclick = () => {
+          if (!state.selectedUser) return;
+          executeCommand(`:${cmd} ${state.selectedUser.username}`);
+        };
+        el.commandButtons.appendChild(btn);
+      });
+    }
+
+    async function connect() {
+      clearError();
+      const serverKey = el.serverKeyInput.value.trim();
+      if (!serverKey) {
+        showError('Please enter a server key.');
+        return;
+      }
+
+      try {
+        await api('/api/setServer', {
+          method: 'POST',
+          body: JSON.stringify({ serverKey })
+        });
+        const status = await api('/api/server');
+        renderServerStatus(status);
+        state.connected = true;
+        toast('Connected to server successfully.');
+        await fetchLogsAndPlayers();
+        await fetchModCalls();
+      } catch (err) {
+        showError(`Error ${err.code || 'N/A'}: ${err.message || 'Connection failed'}`);
+      }
+    }
+
+    async function findUser() {
+      clearError();
+      const username = el.usernameInput.value.trim();
+      if (!username) {
+        showError('Please enter a username.');
+        return;
+      }
+
+      try {
+        const user = await api('/api/findUser', {
+          method: 'POST',
+          body: JSON.stringify({ username })
+        });
+        state.selectedUser = user;
+        renderUserCard(user);
+        toast(`Found ${user.username}`);
+      } catch (err) {
+        showError(`Error ${err.code || 'N/A'}: ${err.message || 'User not found'}`);
+      }
+    }
+
+    el.connectBtn.addEventListener('click', connect);
+    el.findBtn.addEventListener('click', findUser);
+    el.customRunBtn.addEventListener('click', () => {
+      if (!state.selectedUser) {
+        showError('Find a user before running commands.');
+        return;
+      }
+      const custom = el.customCommandInput.value.trim().replace(/^:+/, '');
+      if (!custom) {
+        showError('Enter a custom command name.');
+        return;
+      }
+      executeCommand(`:${custom} ${state.selectedUser.username}`);
+    });
+    el.closeModal.addEventListener('click', closeModal);
+    el.resultModal.addEventListener('click', (event) => {
+      if (event.target === el.resultModal) closeModal();
+    });
+    el.collapseBtn.addEventListener('click', () => {
+      el.sidebar.classList.toggle('collapsed');
+      el.collapseBtn.querySelector('i').classList.toggle('fa-chevron-left');
+      el.collapseBtn.querySelector('i').classList.toggle('fa-chevron-right');
+    });
+
+    initCommandButtons();
+
+    setInterval(() => {
+      if (state.connected) fetchLogsAndPlayers().catch((err) => showError(err.message || 'Refresh failed'));
+    }, 30000);
+
+    setInterval(() => {
+      if (state.connected) fetchModCalls();
+    }, 10000);
+  </script>
+</body>
+</html>
